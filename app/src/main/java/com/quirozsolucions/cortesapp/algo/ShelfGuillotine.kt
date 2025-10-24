@@ -1,100 +1,109 @@
 package com.quirozsolucions.cortesapp.algo
 
-import androidx.compose.ui.graphics.Color
 import com.quirozsolucions.cortesapp.model.*
 
 /**
- * Heurístico “Shelf First-Fit Decreasing”.
- * - Ordena piezas por su lado mayor (desc).
- * - Coloca de izq->der en el estante actual. Si no cabe, intenta rotar.
- * - Si no cabe en ningún estante, crea uno nuevo debajo (guillotina horizontal).
- * - Respeta kerf entre piezas y entre estantes.
+ * Heurística Shelf/Guillotine:
+ * - Ordena por altura (desc) y llena estantes (cortes horizontales).
+ * - Soporta kerf (ancho de corte) en mm y rotación opcional 90°.
  */
 object ShelfGuillotine {
 
-    private val palette = listOf(
-        Color(0xFF8BC34A), Color(0xFFFFC107), Color(0xFF29B6F6),
-        Color(0xFFF06292), Color(0xFF81D4FA), Color(0xFFFFAB91),
-        Color(0xFFCE93D8), Color(0xFFA5D6A7), Color(0xFFFFF59D)
-    )
+    fun layout(
+        board: Board,
+        inputPieces: List<Piece>,
+        kerfMm: Int = 0,
+        allowRotation: Boolean = false
+    ): LayoutResult {
 
-    fun optimize(sheet: SheetSpec, specs: List<RectSpec>): PlanResult {
-        // Expandir cantidades
-        val expanded = specs.flatMap { s ->
-            List(s.quantity) { idx ->
-                s.copy(label = if (s.label.isNotBlank()) s.label else "${s.widthMm}x${s.heightMm} #${idx + 1}")
-            }
-        }.sortedByDescending { maxOf(it.widthMm, it.heightMm) }
+        val kerfCm = kerfMm.toFloat() / 10f // 10 mm = 1 cm (float para cálculos intermedios)
 
-        data class Shelf(var y: Int, var height: Int, var cursorX: Int)
-        val kerf = sheet.kerfMm
-        val shelves = mutableListOf<Shelf>()
-        val placed = mutableListOf<PlacedRect>()
-        val notPlaced = mutableListOf<RectSpec>()
+        // Explota cantidades y asigna índice visible
+        val expanded = inputPieces.flatMap { p ->
+            List(p.quantity) { idx -> p.copy(id = "${p.id}_${idx+1}".hashCode()) to (idx + 1) }
+        }.mapIndexed { globalIdx, pair -> Triple(globalIdx + 1, pair.first, pair.second) }
 
-        fun tryPlaceOnShelf(item: RectSpec, shelf: Shelf, color: Color): PlacedRect? {
-            // Intento sin rotación
-            if (item.widthMm <= sheet.widthMm - shelf.cursorX &&
-                item.heightMm <= shelf.height) {
-                val r = PlacedRect(
-                    xMm = shelf.cursorX,
-                    yMm = shelf.y,
-                    widthMm = item.widthMm,
-                    heightMm = item.heightMm,
-                    label = item.label,
-                    rotated = false,
-                    color = color
-                )
-                shelf.cursorX += item.widthMm + kerf
-                return r
-            }
-            // Intento rotado
-            if (item.canRotate &&
-                item.heightMm <= sheet.widthMm - shelf.cursorX &&
-                item.widthMm <= shelf.height) {
-                val r = PlacedRect(
-                    xMm = shelf.cursorX,
-                    yMm = shelf.y,
-                    widthMm = item.heightMm,
-                    heightMm = item.widthMm,
-                    label = item.label,
-                    rotated = true,
-                    color = color
-                )
-                shelf.cursorX += item.heightMm + kerf
-                return r
-            }
-            return null
-        }
+        // Ordena por altura y ancho
+        val pieces = expanded.sortedWith(
+            compareByDescending<Triple<Int, Piece, Int>> { it.second.heightCm }
+                .thenByDescending { it.second.widthCm }
+        )
 
-        var colorIdx = 0
-        for (item in expanded) {
-            var placedHere: PlacedRect? = null
-            // Probar estantes existentes
-            for (s in shelves) {
-                placedHere = tryPlaceOnShelf(item, s, palette[colorIdx % palette.size])
-                if (placedHere != null) break
-            }
-            // Crear estante si no cupo
-            if (placedHere == null) {
-                val shelfHeight = maxOf(item.heightMm, if (item.canRotate) item.widthMm else 0)
-                val newY = if (shelves.isEmpty()) 0 else shelves.last().let { it.y + it.height + kerf }
-                if (newY + shelfHeight <= sheet.heightMm) {
-                    val s = Shelf(y = newY, height = shelfHeight, cursorX = 0)
-                    val r = tryPlaceOnShelf(item, s, palette[colorIdx % palette.size])
-                    if (r != null) {
-                        shelves += s
-                        placedHere = r
-                    }
+        data class Shelf(var y: Float, var height: Float, var xCursor: Float)
+        val shelves = mutableListOf(Shelf(0f, 0f, 0f))
+
+        val placed = mutableListOf<PlacedPiece>()
+        val unplaced = mutableListOf<Piece>()
+
+        val boardW = board.widthCm.toFloat()
+        val boardH = board.heightCm.toFloat()
+
+        var current = shelves.last()
+
+        fun fitsOnShelf(w: Float, h: Float) =
+            h <= current.height && current.xCursor + w <= boardW
+
+        pieces.forEach { (visibleIdx, p, localIdx) ->
+            // Elegir orientación si se permite rotación
+            val options = if (allowRotation)
+                listOf(p.widthCm to p.heightCm, p.heightCm to p.widthCm)
+            else listOf(p.widthCm to p.heightCm)
+
+            var placedNow = false
+
+            for ((w0, h0) in options) {
+                val w = w0.toFloat()
+                val h = h0.toFloat()
+
+                if (current.height == 0f) current.height = h
+
+                if (fitsOnShelf(w, h)) {
+                    placed += PlacedPiece(
+                        id = p.id,
+                        index = visibleIdx,
+                        xCm = current.xCursor.toInt(),
+                        yCm = current.y.toInt(),
+                        widthCm = w.toInt(),
+                        heightCm = h.toInt(),
+                        shelfIndex = shelves.lastIndex
+                    )
+                    current.xCursor += w + kerfCm
+                    placedNow = true
+                    break
                 }
             }
-            if (placedHere != null) {
-                placed += placedHere
-                colorIdx++
-            } else {
-                notPlaced += item
+
+            if (!placedNow) {
+                // Intentar nuevo estante con orientación óptima (la más baja)
+                val (w0, h0) = options.minBy { it.second }
+                val w = w0.toFloat()
+                val h = h0.toFloat()
+
+                val newY = current.y + current.height + kerfCm
+                if (newY + h <= boardH && w <= boardW) {
+                    current = Shelf(newY, h, 0f)
+                    shelves += current
+                    placed += PlacedPiece(
+                        id = p.id,
+                        index = visibleIdx,
+                        xCm = 0,
+                        yCm = current.y.toInt(),
+                        widthCm = w.toInt(),
+                        heightCm = h.toInt(),
+                        shelfIndex = shelves.lastIndex
+                    )
+                    current.xCursor = w + kerfCm
+                } else {
+                    unplaced += p
+                }
             }
         }
-        return PlanResult(placed = placed, notPlaced = notPlaced, sheet = sheet)
+
+        val usedArea = placed.sumOf { it.widthCm * it.heightCm }
+        val boardArea = (boardW * boardH).toInt()
+        val waste = (boardArea - usedArea).coerceAtLeast(0)
+        val util = if (boardArea > 0) usedArea.toFloat() / boardArea else 0f
+
+        return LayoutResult(placed, unplaced, usedArea, waste, util)
     }
 }

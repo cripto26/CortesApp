@@ -1,91 +1,76 @@
 package com.quirozsolucions.cortesapp.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import com.quirozsolucions.cortesapp.OptimizerViewModel
 
-
-
 @Composable
 fun FormPane(vm: OptimizerViewModel, modifier: Modifier = Modifier) {
-    Column(modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    val grad = Brush.verticalGradient(
+        listOf(
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+        )
+    )
+    Column(
+        modifier
+            .background(grad, shape = MaterialTheme.shapes.large)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        HistoryTag()
+        Text("Corte optimizado", style = MaterialTheme.typography.headlineMedium)
         Text("Ingrese las dimensiones de una lámina", style = MaterialTheme.typography.titleMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedTextField(
-                value = vm.sheetHeightCm, onValueChange = { vm.sheetHeightCm = it },
-                label = { Text("Altura (cm)") }, singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.weight(1f)
-            )
-            OutlinedTextField(
-                value = vm.sheetWidthCm, onValueChange = { vm.sheetWidthCm = it },
-                label = { Text("Ancho (cm)") }, singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.weight(1f)
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            var w by remember { mutableStateOf(vm.board.widthCm.toString()) }
+            var h by remember { mutableStateOf(vm.board.heightCm.toString()) }
+            NumberField("Ancho (cm)", w, { w = it; vm.updateBoard(w.toIntOrNull(), null) }, Modifier.weight(1f))
+            NumberField("Altura (cm)", h, { h = it; vm.updateBoard(null, h.toIntOrNull()) }, Modifier.weight(1f))
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            var kerf by remember { mutableStateOf(vm.kerfMm.toString()) }
+            NumberField("Kerf (mm)", kerf, { kerf = it; vm.updateKerf(kerf.toIntOrNull()) }, Modifier.weight(1f))
+            FilterChip(
+                selected = vm.allowRotation,
+                onClick = { vm.toggleRotation() },
+                label = { Text("Permitir rotación 90°") }
             )
         }
-        OutlinedTextField(
-            value = vm.kerfMm, onValueChange = { vm.kerfMm = it },
-            label = { Text("Kerf (mm)") }, singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.width(160.dp)
-        )
 
-        Spacer(Modifier.height(8.dp))
         Text("Cortes", style = MaterialTheme.typography.titleMedium)
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.heightIn(max = 280.dp)
+        ) {
+            itemsIndexed(vm.pieces) { idx, piece ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("${idx + 1}", modifier = Modifier.width(24.dp), style = MaterialTheme.typography.titleMedium)
+                    var w by remember(piece.id) { mutableStateOf(piece.widthCm.toString()) }
+                    var h by remember(piece.id) { mutableStateOf(piece.heightCm.toString()) }
+                    var q by remember(piece.id) { mutableStateOf(piece.quantity.toString()) }
 
-        vm.rows.forEachIndexed { idx, row ->
-            Card {
-                Row(
-                    Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedTextField(
-                        value = row.widthCm, onValueChange = { vm.setWidth(idx, it) },
-                        label = { Text("Ancho (cm)") }, singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f)
-                    )
-                    OutlinedTextField(
-                        value = row.heightCm, onValueChange = { vm.setHeight(idx, it) },
-                        label = { Text("Altura (cm)") }, singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f)
-                    )
-                    OutlinedTextField(
-                        value = row.qty, onValueChange = { vm.setQty(idx, it) },
-                        label = { Text("Cantidad") }, singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.width(110.dp)
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = row.rot,
-                            onCheckedChange = { checked -> vm.setRot(idx, checked) }
-                        )
-                        Text("Rotar")
-                    }
-                    IconButton(onClick = { vm.removeRow(idx) }) {
-                        Icon(Icons.Filled.Delete, contentDescription = "Eliminar")
-                    }
+                    NumberField("Ancho", w, { w = it; vm.updatePiece(idx, w.toIntOrNull(), null, null) }, Modifier.weight(1f))
+                    NumberField("Altura", h, { h = it; vm.updatePiece(idx, null, h.toIntOrNull(), null) }, Modifier.weight(1f))
+                    NumberField("Cantidad", q, { q = it; vm.updatePiece(idx, null, null, q.toIntOrNull()) }, Modifier.weight(1f))
                 }
             }
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = vm::addRow) { Text("Agregar corte") }
-            Button(onClick = vm::optimize) { Text("Optimizar") }
+            OutlinedButton(onClick = { vm.addRow() }) { Text("Añadir fila") }
+            PrimaryButton(
+                text = "Optimizar",
+                onClick = { vm.optimize() }
+            )
         }
     }
 }
