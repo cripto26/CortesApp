@@ -4,24 +4,40 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.quirozsolucions.cortesapp.ui.AppRoot
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.quirozsolucions.cortesapp.ui.HomeScreen
+import com.quirozsolucions.cortesapp.ui.ResultScreen
 import com.quirozsolucions.cortesapp.ui.theme.AppTheme
-import androidx.compose.ui.platform.LocalConfiguration
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            AppTheme(darkTheme = isSystemInDarkTheme()) {  // <- nombre correcto del parámetro
+            AppTheme(darkTheme = isSystemInDarkTheme()) {
                 val vm: OptimizerViewModel = viewModel()
-                val cfg = LocalConfiguration.current
-                val isWide = cfg.screenWidthDp >= 720
-                Surface(Modifier.fillMaxSize()) {
-                    AppRoot(vm, isWide)
+                val nav = rememberNavController()
+
+                Surface(modifier = Modifier) {
+                    NavHost(navController = nav, startDestination = "home") {
+                        composable("home") {
+                            HomeScreen(
+                                vm = vm,
+                                onOptimize = {
+                                    vm.optimizeAll()
+                                    nav.navigate("result")
+                                }
+                            )
+                        }
+                        composable(
+                            route = "result"
+                        ) { ResultScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                    }
                 }
             }
         }

@@ -1,100 +1,192 @@
 package com.quirozsolucions.cortesapp.ui
 
-import android.content.res.Configuration
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.foundation.text.KeyboardOptions
+
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.quirozsolucions.cortesapp.OptimizerViewModel
 
-
-
 @Composable
-fun FormPane(vm: OptimizerViewModel, modifier: Modifier = Modifier) {
-    val grad = Brush.verticalGradient(
-        listOf(
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.50f)
-        )
-    )
+fun FormPane(
+    vm: OptimizerViewModel,
+    onAddRow: () -> Unit,
+    onOptimize: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val scroll = rememberScrollState()
+
+    // Estados del tablero/kerf como String para permitir borrar/estados intermedios
+    var boardWText by rememberSaveable { mutableStateOf(vm.board.widthCm.toString()) }
+    var boardHText by rememberSaveable { mutableStateOf(vm.board.heightCm.toString()) }
+    var kerfText   by rememberSaveable { mutableStateOf(vm.kerfMm.toString()) }
+    var allowRot   by rememberSaveable { mutableStateOf(vm.allowRotation) }
+
+    // Mantener sincronía si el VM cambia desde fuera (p.ej., reset)
+    LaunchedEffect(vm.board.widthCm, vm.board.heightCm, vm.kerfMm, vm.allowRotation) {
+        boardWText = vm.board.widthCm.toString()
+        boardHText = vm.board.heightCm.toString()
+        kerfText   = vm.kerfMm.toString()
+        allowRot   = vm.allowRotation
+    }
+
     Column(
-        modifier
-            .background(grad, shape = MaterialTheme.shapes.large)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        modifier = modifier
+            .verticalScroll(scroll)
+            .padding(8.dp)
     ) {
-        HistoryTag()
-        Text("Corte optimizado", style = MaterialTheme.typography.headlineMedium)
-        Text("Ingrese las dimensiones de una lámina", style = MaterialTheme.typography.titleMedium)
+        Text("Ingrese las dimensiones de una lámina")
+        Spacer(Modifier.height(6.dp))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(100.dp)) {
-            var w by remember { mutableStateOf(vm.board.widthCm.toString()) }
-            var h by remember { mutableStateOf(vm.board.heightCm.toString()) }
-            NumberField("Ancho (cm)", w, { w = it; vm.updateBoard(w.toIntOrNull(), null) }, Modifier.weight(1f))
-            NumberField("Altura (cm)", h, { h = it; vm.updateBoard(null, h.toIntOrNull()) }, Modifier.weight(1f))
-        }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            var kerf by remember { mutableStateOf(vm.kerfMm.toString()) }
-            NumberField("Kerf (mm)", kerf, { kerf = it; vm.updateKerf(kerf.toIntOrNull()) }, Modifier.weight(1f))
-            FilterChip(
-                selected = vm.allowRotation,
-                onClick = { vm.toggleRotation() },
-                label = { Text("Permitir rotación 90°") }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedTextField(
+                value = boardWText,
+                onValueChange = { new ->
+                    if (new.all { it.isDigit() } || new.isEmpty()) {
+                        boardWText = new
+                        new.toIntOrNull()?.let { w -> vm.updateBoard(w = w, h = null) }
+                    }
+                },
+                label = { Text("Ancho (cm)") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f)
+            )
+            OutlinedTextField(
+                value = boardHText,
+                onValueChange = { new ->
+                    if (new.all { it.isDigit() } || new.isEmpty()) {
+                        boardHText = new
+                        new.toIntOrNull()?.let { h -> vm.updateBoard(w = null, h = h) }
+                    }
+                },
+                label = { Text("Altura (cm)") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f)
             )
         }
 
-        Text("Cortes", style = MaterialTheme.typography.titleMedium)
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.heightIn(max = 280.dp)
-        ) {
-            itemsIndexed(vm.pieces) { idx, piece ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("${idx + 1}", modifier = Modifier.width(24.dp), style = MaterialTheme.typography.titleMedium)
-                    var w by remember(piece.id) { mutableStateOf(piece.widthCm.toString()) }
-                    var h by remember(piece.id) { mutableStateOf(piece.heightCm.toString()) }
-                    var q by remember(piece.id) { mutableStateOf(piece.quantity.toString()) }
+        Spacer(Modifier.height(6.dp))
 
-                    NumberField("Ancho", w, { w = it; vm.updatePiece(idx, w.toIntOrNull(), null, null) }, Modifier.weight(1f))
-                    NumberField("Altura", h, { h = it; vm.updatePiece(idx, null, h.toIntOrNull(), null) }, Modifier.weight(1f))
-                    NumberField("Cantidad", q, { q = it; vm.updatePiece(idx, null, null, q.toIntOrNull()) }, Modifier.weight(1f))
-                }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedTextField(
+                value = kerfText,
+                onValueChange = { new ->
+                    if (new.all { it.isDigit() } || new.isEmpty()) {
+                        kerfText = new
+                        new.toIntOrNull()?.let(vm::updateKerf)
+                    }
+                },
+                label = { Text("Kerf (mm)") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f)
+            )
+            Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.Start) {
+                Checkbox(
+                    checked = allowRot,
+                    onCheckedChange = {
+                        allowRot = it
+                        vm.toggleRotation()
+                    }
+                )
+                Text("Permitir rotación 90°")
             }
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { vm.addRow() }) { Text("Añadir fila") }
-            PrimaryButton(
-                text = "Optimizar",
-                onClick = { vm.optimize() }
-            )
-        }
-    }
-}
+        Spacer(Modifier.height(12.dp))
+        Text("Cortes")
 
-// Si tienes tu propio tema, cámbialo por él (p. ej., CortesAppTheme { ... }).
-@Preview(name = "FormPane – Light", showBackground = true, widthDp = 390)
-@Preview(name = "FormPane – Dark", uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, widthDp = 390)
-@Composable
-private fun FormPanePreview() {
-    val vm = remember {
-        OptimizerViewModel().apply {
-            // (Opcional) valores de muestra para que se vea “bonito”:
-            updateBoard(215, 244)
-            updateKerf(3)
-            // deja las piezas por defecto o agrega algunas con addRow/updatePiece(...)
+        // Filas dinámicas: estados de texto por pieza, recordados por ID
+        vm.pieces.forEachIndexed { index, piece ->
+            Spacer(Modifier.height(8.dp))
+
+            // Cada campo usa rememberSaveable con clave por pieza e identificador del campo
+            var wText by rememberSaveable(piece.id, "w") { mutableStateOf(piece.widthCm.toString()) }
+            var hText by rememberSaveable(piece.id, "h") { mutableStateOf(piece.heightCm.toString()) }
+            var qText by rememberSaveable(piece.id, "q") { mutableStateOf(piece.quantity.toString()) }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = wText,
+                    onValueChange = { new ->
+                        if (new.all { it.isDigit() } || new.isEmpty()) {
+                            wText = new
+                            new.toIntOrNull()?.let { w -> vm.updatePiece(index, width = w, height = null, qty = null) }
+                        }
+                    },
+                    label = { Text("Ancho") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f)
+                )
+                OutlinedTextField(
+                    value = hText,
+                    onValueChange = { new ->
+                        if (new.all { it.isDigit() } || new.isEmpty()) {
+                            hText = new
+                            new.toIntOrNull()?.let { h -> vm.updatePiece(index, width = null, height = h, qty = null) }
+                        }
+                    },
+                    label = { Text("Altura") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f)
+                )
+                OutlinedTextField(
+                    value = qText,
+                    onValueChange = { new ->
+                        if (new.all { it.isDigit() } || new.isEmpty()) {
+                            qText = new
+                            new.toIntOrNull()?.let { q -> vm.updatePiece(index, width = null, height = null, qty = q) }
+                        }
+                    },
+                    label = { Text("Cantidad") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
-    }
-    MaterialTheme {
-        Surface(Modifier.fillMaxWidth().padding(16.dp)) {
-            FormPane(vm = vm, modifier = Modifier.fillMaxWidth())
+
+        Spacer(Modifier.height(12.dp))
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = onAddRow, modifier = Modifier.weight(1f)) {
+                Text("Añadir fila")
+            }
+            Button(
+                onClick = {
+                    vm.optimizeAll()
+                    onOptimize()
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Optimizar")
+            }
         }
+
+        Spacer(Modifier.height(8.dp))
     }
 }

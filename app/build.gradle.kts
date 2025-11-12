@@ -4,11 +4,6 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// 👇 añade este bloque (puede ir debajo de plugins)
-kotlin {
-    jvmToolchain(17)
-}
-
 android {
     namespace = "com.quirozsolucions.cortesapp"
     compileSdk = 35
@@ -19,56 +14,35 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
-        vectorDrawables { useSupportLibrary = true }
-    }
-
-    buildTypes {
-        release {
-            isMinifyEnabled = false
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro",
-            )
-        }
     }
 
     buildFeatures { compose = true }
 
-    // 👇 alinea Java a 17
+    // ⚠️ Asegura que Java (javac) compile al MISMO nivel que Kotlin
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    // 👇 opcional si no usas el bloque `kotlin { jvmToolchain(17) }`
-    kotlinOptions { jvmTarget = "17" }
 
-    packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
+    // ❌ Si tenías esto, elimínalo (causa 1.8 vs 21):
+    // kotlinOptions { jvmTarget = "1.8" }
 }
 
+// ⚠️ Y fija el toolchain de Kotlin al mismo nivel
+kotlin {
+    jvmToolchain(17)   // usa 21 si prefieres, pero entonces cambia ambos a 21
+}
 
 dependencies {
-    implementation(platform(libs.compose.bom))
-    implementation(libs.compose.ui)
-    implementation(libs.compose.ui.graphics)
-    implementation(libs.compose.material3)
-    implementation(libs.activity.compose)
-    implementation(libs.lifecycle.viewmodel)
-    implementation(libs.material.icons)
+    implementation(platform("androidx.compose:compose-bom:2025.01.00"))
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    debugImplementation("androidx.compose.ui:ui-tooling")
 
-    // Deja SOLO UNA forma de ui-text:
-    implementation(libs.compose.ui.text)
-    // implementation("androidx.compose.ui:ui-text") // (borra esta si usas el alias)
+    implementation("androidx.lifecycle:lifecycle-runtime-compose-android:2.9.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose-android:2.9.0")
 
-    debugImplementation(libs.compose.ui.tooling)
-
-
-
-    implementation(libs.compose.foundation)   // <- NUEVO
-
-
-
-
-
-
-
+    implementation("androidx.activity:activity-compose:1.9.3")
+    implementation("androidx.navigation:navigation-compose:2.8.3")
 }

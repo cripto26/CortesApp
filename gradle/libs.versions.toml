@@ -4,6 +4,7 @@ kotlin = "2.0.0"
 compose-bom = "2024.10.01"
 activity-compose = "1.9.3"
 lifecycle = "2.8.6"
+navigation-compose-jvmstubs = "2.9.6"
 
 [libraries]
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
@@ -16,3 +17,4 @@ lifecycle-viewmodel = { module = "androidx.lifecycle:lifecycle-viewmodel-compose
 material-icons = { module = "androidx.compose.material:material-icons-extended" }
 compose-ui-text = { module = "androidx.compose.ui:ui-text" }
 compose-foundation = { module = "androidx.compose.foundation:foundation" }
+navigation-compose-jvmstubs = { group = "androidx.navigation", name = "navigation-compose-jvmstubs", version.ref = "navigation-compose-jvmstubs" }
