@@ -1,13 +1,36 @@
 package com.quirozsolucions.cortesapp.algo
 
-import com.quirozsolucions.cortesapp.model.*
+import com.quirozsolucions.cortesapp.model.Board
+import com.quirozsolucions.cortesapp.model.LayoutResult
+import com.quirozsolucions.cortesapp.model.Piece
+import com.quirozsolucions.cortesapp.model.PlacedPiece
 
 /**
- * Heurística Shelf/Guillotine:
- * - Ordena por altura (desc) y llena estantes (cortes horizontales).
- * - Soporta kerf (ancho de corte) en mm y rotación opcional 90°.
+ * Algoritmo tipo MaxRects (Best Area Fit) con soporte de kerf.
+ *
+ * Convenciones:
+ *  - Board.widthCm  -> L1 (ancho útil de la lámina, eje X)
+ *  - Board.heightCm -> Beta (dirección de la beta, eje Y)
+ *
+ * En cada pieza:
+ *  - widthCm  = L1   (perpendicular a la beta)
+ *  - heightCm = Beta (paralela a la beta)
  */
 object ShelfGuillotine {
+
+    data class FreeRect(
+        var x: Float,
+        var y: Float,
+        var w: Float,
+        var h: Float
+    )
+
+    private fun rectsIntersect(a: FreeRect, b: FreeRect): Boolean {
+        return !(b.x >= a.x + a.w ||
+                b.x + b.w <= a.x ||
+                b.y >= a.y + a.h ||
+                b.y + b.h <= a.y)
+    }
 
     fun layout(
         board: Board,
@@ -16,94 +39,228 @@ object ShelfGuillotine {
         allowRotation: Boolean = false
     ): LayoutResult {
 
-        val kerfCm = kerfMm.toFloat() / 10f // 10 mm = 1 cm (float para cálculos intermedios)
+        val kerf = kerfMm.toFloat() / 10f
+        val boardW = board.widthCm.toFloat()
+        val boardH = board.heightCm.toFloat()
 
-        // Explota cantidades y asigna índice visible
-        val expanded = inputPieces.flatMap { p ->
-            List(p.quantity) { idx -> p.copy(id = "${p.id}_${idx+1}".hashCode()) to (idx + 1) }
-        }.mapIndexed { globalIdx, pair -> Triple(globalIdx + 1, pair.first, pair.second) }
-
-        // Ordena por altura y ancho
-        val pieces = expanded.sortedWith(
-            compareByDescending<Triple<Int, Piece, Int>> { it.second.heightCm }
-                .thenByDescending { it.second.widthCm }
+        // Expandir cantidades
+        data class EPiece(
+            val indexVisible: Int,
+            val piece: Piece
         )
 
-        data class Shelf(var y: Float, var height: Float, var xCursor: Float)
-        val shelves = mutableListOf(Shelf(0f, 0f, 0f))
+        val expanded = inputPieces.flatMap { p ->
+            List(p.quantity) { idx ->
+                EPiece(
+                    indexVisible = 0,
+                    piece = p.copy(
+                        id = "${p.id}_${idx + 1}".hashCode(),
+                        quantity = 1
+                    )
+                )
+            }
+        }.mapIndexed { idx, e ->
+            e.copy(indexVisible = idx + 1)
+        }
+
+        // Ordenar por área descendente
+        val pieces = expanded.sortedByDescending {
+            it.piece.widthCm * it.piece.heightCm
+        }
+
+        // Lista de rectángulos libres
+        val freeRects = mutableListOf(
+            FreeRect(0f, 0f, boardW, boardH)
+        )
 
         val placed = mutableListOf<PlacedPiece>()
         val unplaced = mutableListOf<Piece>()
 
-        val boardW = board.widthCm.toFloat()
-        val boardH = board.heightCm.toFloat()
+        fun splitFreeRect(free: FreeRect, used: FreeRect, kerf: Float) {
+            val x = free.x
+            val y = free.y
+            val w = free.w
+            val h = free.h
 
-        var current = shelves.last()
+            val ux = used.x
+            val uy = used.y
+            val uw = used.w
+            val uh = used.h
 
-        fun fitsOnShelf(w: Float, h: Float) =
-            h <= current.height && current.xCursor + w <= boardW
-
-        pieces.forEach { (visibleIdx, p, localIdx) ->
-            // Elegir orientación si se permite rotación
-            val options = if (allowRotation)
-                listOf(p.widthCm to p.heightCm, p.heightCm to p.widthCm)
-            else listOf(p.widthCm to p.heightCm)
-
-            var placedNow = false
-
-            for ((w0, h0) in options) {
-                val w = w0.toFloat()
-                val h = h0.toFloat()
-
-                if (current.height == 0f) current.height = h
-
-                if (fitsOnShelf(w, h)) {
-                    placed += PlacedPiece(
-                        id = p.id,
-                        index = visibleIdx,
-                        xCm = current.xCursor.toInt(),
-                        yCm = current.y.toInt(),
-                        widthCm = w.toInt(),
-                        heightCm = h.toInt(),
-                        shelfIndex = shelves.lastIndex
+            // Arriba
+            if (uy > y) {
+                val nh = uy - y - kerf
+                if (nh > 0f) {
+                    freeRects += FreeRect(
+                        x = x,
+                        y = y,
+                        w = w,
+                        h = nh
                     )
-                    current.xCursor += w + kerfCm
-                    placedNow = true
-                    break
                 }
             }
 
-            if (!placedNow) {
-                // Intentar nuevo estante con orientación óptima (la más baja)
-                val (w0, h0) = options.minBy { it.second }
-                val w = w0.toFloat()
-                val h = h0.toFloat()
-
-                val newY = current.y + current.height + kerfCm
-                if (newY + h <= boardH && w <= boardW) {
-                    current = Shelf(newY, h, 0f)
-                    shelves += current
-                    placed += PlacedPiece(
-                        id = p.id,
-                        index = visibleIdx,
-                        xCm = 0,
-                        yCm = current.y.toInt(),
-                        widthCm = w.toInt(),
-                        heightCm = h.toInt(),
-                        shelfIndex = shelves.lastIndex
+            // Abajo
+            if (uy + uh < y + h) {
+                val ny = uy + uh + kerf
+                val nh = (y + h) - ny
+                if (nh > 0f) {
+                    freeRects += FreeRect(
+                        x = x,
+                        y = ny,
+                        w = w,
+                        h = nh
                     )
-                    current.xCursor = w + kerfCm
-                } else {
-                    unplaced += p
+                }
+            }
+
+            // Izquierda
+            if (ux > x) {
+                val nw = ux - x - kerf
+                if (nw > 0f) {
+                    freeRects += FreeRect(
+                        x = x,
+                        y = y,
+                        w = nw,
+                        h = h
+                    )
+                }
+            }
+
+            // Derecha
+            if (ux + uw < x + w) {
+                val nx = ux + uw + kerf
+                val nw = (x + w) - nx
+                if (nw > 0f) {
+                    freeRects += FreeRect(
+                        x = nx,
+                        y = y,
+                        w = nw,
+                        h = h
+                    )
                 }
             }
         }
 
+        fun pruneFreeRects() {
+            var i = 0
+            while (i < freeRects.size) {
+                var removed = false
+                var j = i + 1
+                while (j < freeRects.size) {
+                    val a = freeRects[i]
+                    val b = freeRects[j]
+
+                    val containsAB =
+                        a.x <= b.x &&
+                                a.y <= b.y &&
+                                a.x + a.w >= b.x + b.w &&
+                                a.y + a.h >= b.y + b.h
+
+                    val containsBA =
+                        b.x <= a.x &&
+                                b.y <= a.y &&
+                                b.x + b.w >= a.x + a.w &&
+                                b.y + b.h >= a.y + a.h
+
+                    if (containsAB) {
+                        freeRects.removeAt(j)
+                        continue
+                    }
+                    if (containsBA) {
+                        freeRects.removeAt(i)
+                        removed = true
+                        break
+                    }
+                    j++
+                }
+                if (!removed) i++
+            }
+        }
+
+        // MAXRECTS BAF — Best Area Fit
+        for (ep in pieces) {
+            val p = ep.piece
+            val visible = ep.indexVisible
+
+            val l1 = p.widthCm.toFloat()
+            val beta = p.heightCm.toFloat()
+
+            val orientations =
+                if (allowRotation) listOf(l1 to beta, beta to l1)
+                else listOf(l1 to beta)
+
+            var bestRect: FreeRect? = null
+            var bestPlacement: FreeRect? = null
+            var bestWaste = Float.MAX_VALUE
+
+            // Buscar el mejor hueco
+            for (free in freeRects) {
+                for ((w, h) in orientations) {
+                    if (w + kerf <= free.w && h + kerf <= free.h) {
+                        val waste = (free.w * free.h) - (w * h)
+                        if (waste < bestWaste) {
+                            bestWaste = waste
+                            bestRect = free
+                            bestPlacement = FreeRect(
+                                x = free.x,
+                                y = free.y,
+                                w = w,
+                                h = h
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (bestRect == null || bestPlacement == null) {
+                // No se pudo ubicar esta pieza en este tablero
+                unplaced += p
+                continue
+            }
+
+            val usedRect = bestPlacement
+
+            // Registrar la pieza colocada
+            placed += PlacedPiece(
+                id = p.id,
+                index = visible,
+                xCm = usedRect.x.toInt(),
+                yCm = usedRect.y.toInt(),
+                widthCm = usedRect.w.toInt(),
+                heightCm = usedRect.h.toInt(),
+                shelfIndex = 0
+            )
+
+            // Recortar el área ocupada de TODOS los rectángulos libres
+            var i = 0
+            while (i < freeRects.size) {
+                val free = freeRects[i]
+                if (rectsIntersect(free, usedRect)) {
+                    // Quitar el rectángulo original y reemplazarlo por los fragmentos
+                    freeRects.removeAt(i)
+                    splitFreeRect(free, usedRect, kerf)
+                    i--
+                }
+                i++
+            }
+
+            // Eliminar rectángulos redundantes
+            pruneFreeRects()
+        }
+
+        // Cálculo de área
         val usedArea = placed.sumOf { it.widthCm * it.heightCm }
         val boardArea = (boardW * boardH).toInt()
-        val waste = (boardArea - usedArea).coerceAtLeast(0)
-        val util = if (boardArea > 0) usedArea.toFloat() / boardArea else 0f
+        val wasteArea = (boardArea - usedArea).coerceAtLeast(0)
+        val util = usedArea.toFloat() / boardArea.toFloat()
 
-        return LayoutResult(placed, unplaced, usedArea, waste, util)
+        return LayoutResult(
+            placed = placed,
+            unplaced = unplaced,
+            usedAreaCm2 = usedArea,
+            wasteAreaCm2 = wasteArea,
+            utilization = util
+        )
     }
 }

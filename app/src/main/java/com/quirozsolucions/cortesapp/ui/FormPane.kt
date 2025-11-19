@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.OutlinedButton
@@ -21,8 +22,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.text.KeyboardOptions
-
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.quirozsolucions.cortesapp.OptimizerViewModel
@@ -58,7 +57,10 @@ fun FormPane(
         Text("Ingrese las dimensiones de una lámina")
         Spacer(Modifier.height(6.dp))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
             OutlinedTextField(
                 value = boardWText,
                 onValueChange = { new ->
@@ -89,7 +91,10 @@ fun FormPane(
 
         Spacer(Modifier.height(6.dp))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
             OutlinedTextField(
                 value = kerfText,
                 onValueChange = { new ->
@@ -103,7 +108,10 @@ fun FormPane(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.weight(1f)
             )
-            Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.Start) {
+            Row(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.Start
+            ) {
                 Checkbox(
                     checked = allowRot,
                     onCheckedChange = {
@@ -123,33 +131,48 @@ fun FormPane(
             Spacer(Modifier.height(8.dp))
 
             // Cada campo usa rememberSaveable con clave por pieza e identificador del campo
-            var wText by rememberSaveable(piece.id, "w") { mutableStateOf(piece.widthCm.toString()) }
-            var hText by rememberSaveable(piece.id, "h") { mutableStateOf(piece.heightCm.toString()) }
-            var qText by rememberSaveable(piece.id, "q") { mutableStateOf(piece.quantity.toString()) }
+            var l1Text by rememberSaveable(piece.id, "l1") {
+                mutableStateOf(piece.widthCm.toString())
+            }
+            var betaText by rememberSaveable(piece.id, "beta") {
+                mutableStateOf(piece.heightCm.toString())
+            }
+            var qText by rememberSaveable(piece.id, "q") {
+                mutableStateOf(piece.quantity.toString())
+            }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 OutlinedTextField(
-                    value = wText,
+                    value = l1Text,
                     onValueChange = { new ->
                         if (new.all { it.isDigit() } || new.isEmpty()) {
-                            wText = new
-                            new.toIntOrNull()?.let { w -> vm.updatePiece(index, width = w, height = null, qty = null) }
+                            l1Text = new
+                            new.toIntOrNull()?.let { l1 ->
+                                vm.updatePiece(index, width = l1, height = null, qty = null)
+                            }
                         }
                     },
-                    label = { Text("Ancho") },
+                    // 👇 Antes: "Ancho"
+                    label = { Text("L1 (cm)") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.weight(1f)
                 )
                 OutlinedTextField(
-                    value = hText,
+                    value = betaText,
                     onValueChange = { new ->
                         if (new.all { it.isDigit() } || new.isEmpty()) {
-                            hText = new
-                            new.toIntOrNull()?.let { h -> vm.updatePiece(index, width = null, height = h, qty = null) }
+                            betaText = new
+                            new.toIntOrNull()?.let { beta ->
+                                vm.updatePiece(index, width = null, height = beta, qty = null)
+                            }
                         }
                     },
-                    label = { Text("Altura") },
+                    // 👇 Antes: "Altura"
+                    label = { Text("Beta (cm)") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.weight(1f)
@@ -159,7 +182,9 @@ fun FormPane(
                     onValueChange = { new ->
                         if (new.all { it.isDigit() } || new.isEmpty()) {
                             qText = new
-                            new.toIntOrNull()?.let { q -> vm.updatePiece(index, width = null, height = null, qty = q) }
+                            new.toIntOrNull()?.let { q ->
+                                vm.updatePiece(index, width = null, height = null, qty = q)
+                            }
                         }
                     },
                     label = { Text("Cantidad") },
@@ -172,7 +197,10 @@ fun FormPane(
 
         Spacer(Modifier.height(12.dp))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
             OutlinedButton(onClick = onAddRow, modifier = Modifier.weight(1f)) {
                 Text("Añadir fila")
             }
