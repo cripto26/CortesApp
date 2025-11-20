@@ -7,8 +7,8 @@ import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material.icons.Icons               // 👈 IMPORT para íconos
-import androidx.compose.material.icons.filled.ArrowBack  // 👈 Icono de “volver”
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,7 +22,7 @@ import kotlin.math.max
 
 @OptIn(
     ExperimentalFoundationApi::class,
-    ExperimentalMaterial3Api::class   // 👈 algunos artefactos muestran warning sin este opt-in
+    ExperimentalMaterial3Api::class
 )
 @Composable
 fun ResultScreen(vm: OptimizerViewModel, onBack: () -> Unit) {
@@ -63,14 +63,13 @@ fun ResultScreen(vm: OptimizerViewModel, onBack: () -> Unit) {
             ) { page ->
                 val res: LayoutResult = pages[page]
 
-                var scale by remember { mutableFloatStateOf(1f) }   // 👈 state recomendado
+                var scale by remember { mutableFloatStateOf(1f) }
                 val transformState = remember {
                     TransformableState { zoomChange, _, _ ->
                         scale = (scale * zoomChange).coerceIn(0.5f, 5f)
                     }
                 }
 
-                // Fondo suave
                 val grad = Brush.verticalGradient(
                     listOf(
                         MaterialTheme.colorScheme.surfaceContainer,
@@ -89,8 +88,8 @@ fun ResultScreen(vm: OptimizerViewModel, onBack: () -> Unit) {
                         Modifier
                             .fillMaxWidth()
                             .aspectRatio(
-                                vm.board.widthCm.toFloat() /
-                                        vm.board.heightCm.toFloat()
+                                vm.board.widthMm.toFloat() /
+                                        vm.board.heightMm.toFloat()
                             )
                             .graphicsLayer(scaleX = scale, scaleY = scale)
                             .transformable(transformState)
@@ -115,7 +114,7 @@ fun ResultScreen(vm: OptimizerViewModel, onBack: () -> Unit) {
                 val res = pages[pagerState.currentPage]
                 val utilPct = (res.utilization * 100f)
                 Text(
-                    "Rendimiento: ${"%.1f".format(utilPct)}% | Desperdicio: ${res.wasteAreaCm2} cm²"
+                    "Rendimiento: ${"%.1f".format(utilPct)}% | Desperdicio: ${vm.formatArea(res.wasteArea)}"
                 )
             }
 

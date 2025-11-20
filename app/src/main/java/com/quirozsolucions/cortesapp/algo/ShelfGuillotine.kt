@@ -8,13 +8,9 @@ import com.quirozsolucions.cortesapp.model.PlacedPiece
 /**
  * Algoritmo tipo MaxRects (Best Area Fit) con soporte de kerf.
  *
- * Convenciones:
- *  - Board.widthCm  -> L1 (ancho útil de la lámina, eje X)
- *  - Board.heightCm -> Beta (dirección de la beta, eje Y)
- *
- * En cada pieza:
- *  - widthCm  = L1   (perpendicular a la beta)
- *  - heightCm = Beta (paralela a la beta)
+ * Convenciones (todo en milímetros):
+ *  - Board.widthMm  -> L1 (eje X)
+ *  - Board.heightMm -> Beta (eje Y)
  */
 object ShelfGuillotine {
 
@@ -39,9 +35,9 @@ object ShelfGuillotine {
         allowRotation: Boolean = false
     ): LayoutResult {
 
-        val kerf = kerfMm.toFloat() / 10f
-        val boardW = board.widthCm.toFloat()
-        val boardH = board.heightCm.toFloat()
+        val kerf = kerfMm.toFloat()
+        val boardW = board.widthMm.toFloat()
+        val boardH = board.heightMm.toFloat()
 
         // Expandir cantidades
         data class EPiece(
@@ -65,7 +61,7 @@ object ShelfGuillotine {
 
         // Ordenar por área descendente
         val pieces = expanded.sortedByDescending {
-            it.piece.widthCm * it.piece.heightCm
+            it.piece.widthMm * it.piece.heightMm
         }
 
         // Lista de rectángulos libres
@@ -178,13 +174,13 @@ object ShelfGuillotine {
             }
         }
 
-        // MAXRECTS BAF — Best Area Fit
+        // MAXRECTS BAF — Best Area Fit con criterio secundario
         for (ep in pieces) {
             val p = ep.piece
             val visible = ep.indexVisible
 
-            val l1 = p.widthCm.toFloat()
-            val beta = p.heightCm.toFloat()
+            val l1 = p.widthMm.toFloat()
+            val beta = p.heightMm.toFloat()
 
             val orientations =
                 if (allowRotation) listOf(l1 to beta, beta to l1)
@@ -199,7 +195,28 @@ object ShelfGuillotine {
                 for ((w, h) in orientations) {
                     if (w + kerf <= free.w && h + kerf <= free.h) {
                         val waste = (free.w * free.h) - (w * h)
-                        if (waste < bestWaste) {
+
+                        // Criterio:
+                        // 1) Menos desperdicio
+                        // 2) Si empatan, más arriba (menor y)
+                        // 3) Si sigue empate, más a la izquierda (menor x)
+                        val isBetter = when {
+                            waste < bestWaste -> true
+                            waste == bestWaste -> {
+                                if (bestRect == null) {
+                                    true
+                                } else if (free.y < bestRect!!.y) {
+                                    true
+                                } else if (free.y == bestRect!!.y) {
+                                    free.x < bestRect!!.x
+                                } else {
+                                    false
+                                }
+                            }
+                            else -> false
+                        }
+
+                        if (isBetter) {
                             bestWaste = waste
                             bestRect = free
                             bestPlacement = FreeRect(
@@ -225,10 +242,10 @@ object ShelfGuillotine {
             placed += PlacedPiece(
                 id = p.id,
                 index = visible,
-                xCm = usedRect.x.toInt(),
-                yCm = usedRect.y.toInt(),
-                widthCm = usedRect.w.toInt(),
-                heightCm = usedRect.h.toInt(),
+                xMm = usedRect.x.toInt(),
+                yMm = usedRect.y.toInt(),
+                widthMm = usedRect.w.toInt(),
+                heightMm = usedRect.h.toInt(),
                 shelfIndex = 0
             )
 
@@ -237,7 +254,6 @@ object ShelfGuillotine {
             while (i < freeRects.size) {
                 val free = freeRects[i]
                 if (rectsIntersect(free, usedRect)) {
-                    // Quitar el rectángulo original y reemplazarlo por los fragmentos
                     freeRects.removeAt(i)
                     splitFreeRect(free, usedRect, kerf)
                     i--
@@ -249,8 +265,8 @@ object ShelfGuillotine {
             pruneFreeRects()
         }
 
-        // Cálculo de área
-        val usedArea = placed.sumOf { it.widthCm * it.heightCm }
+        // Cálculo de área (mm²)
+        val usedArea = placed.sumOf { it.widthMm * it.heightMm }
         val boardArea = (boardW * boardH).toInt()
         val wasteArea = (boardArea - usedArea).coerceAtLeast(0)
         val util = usedArea.toFloat() / boardArea.toFloat()
@@ -258,8 +274,8 @@ object ShelfGuillotine {
         return LayoutResult(
             placed = placed,
             unplaced = unplaced,
-            usedAreaCm2 = usedArea,
-            wasteAreaCm2 = wasteArea,
+            usedArea = usedArea,
+            wasteArea = wasteArea,
             utilization = util
         )
     }

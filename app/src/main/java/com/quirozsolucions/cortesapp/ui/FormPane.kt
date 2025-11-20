@@ -10,8 +10,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -21,10 +24,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.quirozsolucions.cortesapp.OptimizerViewModel
+import com.quirozsolucions.cortesapp.model.LengthUnit
 
 @Composable
 fun FormPane(
@@ -36,17 +41,21 @@ fun FormPane(
     val scroll = rememberScrollState()
 
     // Estados del tablero/kerf como String para permitir borrar/estados intermedios
-    var boardWText by rememberSaveable { mutableStateOf(vm.board.widthCm.toString()) }
-    var boardHText by rememberSaveable { mutableStateOf(vm.board.heightCm.toString()) }
-    var kerfText   by rememberSaveable { mutableStateOf(vm.kerfMm.toString()) }
-    var allowRot   by rememberSaveable { mutableStateOf(vm.allowRotation) }
+    var boardWText by rememberSaveable {
+        mutableStateOf(vm.lengthValueInCurrentUnit(vm.board.widthMm).toString())
+    }
+    var boardHText by rememberSaveable {
+        mutableStateOf(vm.lengthValueInCurrentUnit(vm.board.heightMm).toString())
+    }
+    var kerfText by rememberSaveable { mutableStateOf(vm.kerfMm.toString()) }
+    var allowRot by rememberSaveable { mutableStateOf(vm.allowRotation) }
 
-    // Mantener sincronía si el VM cambia desde fuera (p.ej., reset)
-    LaunchedEffect(vm.board.widthCm, vm.board.heightCm, vm.kerfMm, vm.allowRotation) {
-        boardWText = vm.board.widthCm.toString()
-        boardHText = vm.board.heightCm.toString()
-        kerfText   = vm.kerfMm.toString()
-        allowRot   = vm.allowRotation
+    // Mantener sincronía si el VM cambia desde fuera (p.ej., cambio de unidad)
+    LaunchedEffect(vm.board.widthMm, vm.board.heightMm, vm.kerfMm, vm.allowRotation, vm.unit) {
+        boardWText = vm.lengthValueInCurrentUnit(vm.board.widthMm).toString()
+        boardHText = vm.lengthValueInCurrentUnit(vm.board.heightMm).toString()
+        kerfText = vm.kerfMm.toString()
+        allowRot = vm.allowRotation
     }
 
     Column(
@@ -55,6 +64,25 @@ fun FormPane(
             .padding(8.dp)
     ) {
         Text("Ingrese las dimensiones de una lámina")
+        Spacer(Modifier.height(6.dp))
+
+        // Selector de unidad (mm / cm / m)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Unidad:")
+            LengthUnit.values().forEach { u ->
+                OutlinedButton(
+                    onClick = { vm.changeUnit(u) },
+                    enabled = vm.unit != u
+                ) {
+                    Text(u.label)
+                }
+            }
+        }
+
         Spacer(Modifier.height(6.dp))
 
         Row(
@@ -69,7 +97,7 @@ fun FormPane(
                         new.toIntOrNull()?.let { w -> vm.updateBoard(w = w, h = null) }
                     }
                 },
-                label = { Text("Ancho (cm)") },
+                label = { Text("Ancho (${vm.unit.label})") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.weight(1f)
@@ -82,7 +110,7 @@ fun FormPane(
                         new.toIntOrNull()?.let { h -> vm.updateBoard(w = null, h = h) }
                     }
                 },
-                label = { Text("Altura (cm)") },
+                label = { Text("Altura (${vm.unit.label})") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.weight(1f)
@@ -93,6 +121,7 @@ fun FormPane(
 
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
             OutlinedTextField(
@@ -109,8 +138,8 @@ fun FormPane(
                 modifier = Modifier.weight(1f)
             )
             Row(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.Start
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
             ) {
                 Checkbox(
                     checked = allowRot,
@@ -126,16 +155,14 @@ fun FormPane(
         Spacer(Modifier.height(12.dp))
         Text("Cortes")
 
-        // Filas dinámicas: estados de texto por pieza, recordados por ID
         vm.pieces.forEachIndexed { index, piece ->
             Spacer(Modifier.height(8.dp))
 
-            // Cada campo usa rememberSaveable con clave por pieza e identificador del campo
             var l1Text by rememberSaveable(piece.id, "l1") {
-                mutableStateOf(piece.widthCm.toString())
+                mutableStateOf(vm.lengthValueInCurrentUnit(piece.widthMm).toString())
             }
             var betaText by rememberSaveable(piece.id, "beta") {
-                mutableStateOf(piece.heightCm.toString())
+                mutableStateOf(vm.lengthValueInCurrentUnit(piece.heightMm).toString())
             }
             var qText by rememberSaveable(piece.id, "q") {
                 mutableStateOf(piece.quantity.toString())
@@ -143,6 +170,7 @@ fun FormPane(
 
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 OutlinedTextField(
@@ -155,8 +183,7 @@ fun FormPane(
                             }
                         }
                     },
-                    // 👇 Antes: "Ancho"
-                    label = { Text("L1 (cm)") },
+                    label = { Text("L1 (${vm.unit.label})") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.weight(1f)
@@ -171,8 +198,7 @@ fun FormPane(
                             }
                         }
                     },
-                    // 👇 Antes: "Altura"
-                    label = { Text("Beta (cm)") },
+                    label = { Text("Beta (${vm.unit.label})") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.weight(1f)
@@ -192,26 +218,31 @@ fun FormPane(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.weight(1f)
                 )
+
+                // Botón para eliminar la fila (no se muestra si solo hay una fila)
+                if (vm.pieces.size > 1) {
+                    IconButton(onClick = { vm.removeRow(index) }) {
+                        Icon(
+                            imageVector = Icons.Filled.Delete,
+                            contentDescription = "Eliminar fila"
+                        )
+                    }
+                }
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(16.dp))
 
+        // Botón de añadir fila centrado
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center
         ) {
-            OutlinedButton(onClick = onAddRow, modifier = Modifier.weight(1f)) {
-                Text("Añadir fila")
-            }
-            Button(
-                onClick = {
-                    vm.optimizeAll()
-                    onOptimize()
-                },
-                modifier = Modifier.weight(1f)
+            OutlinedButton(
+                onClick = onAddRow,
+                modifier = Modifier.height(48.dp)
             ) {
-                Text("Optimizar")
+                Text("Añadir fila")
             }
         }
 
